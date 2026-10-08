@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="FLORE-AE audio examples: reconstruction, text-to-audio generation, and audio editing.">
+  <title>FLORE-AE — Audio Examples</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="stylesheet" href="styles.css?v=5b60b60bf6e6">
+  <script defer src="data.js?v=202ac5425023"></script>
+  <script defer src="app.js?v=405675ae9de6"></script>
+</head>
+<body>
+<a class="skip-link" href="#reconstruction">Skip to audio examples</a>
+<main class="page">
+  <header class="page-header">
+    <h1><span class="paper-name">FLORE-AE:</span> Rethinking Audio Autoencoding<br class="wide-break"> with Waveform Diffusion Decoders</h1>
+    <nav aria-label="Sections">
+      <a href="#reconstruction">Reconstruction</a>
+      <a href="#generation">Generation</a>
+      <a href="#editing">Editing</a>
+      <a href="#results">Results</a>
+    </nav>
+    <p class="overview">FLORE-AE formulates audio reconstruction at high compression as waveform diffusion conditioned on compact latents. Its latent interface supports reconstruction, text-to-audio generation, and editing.</p>
+    <details class="method-details">
+      <summary>Method overview</summary>
+      <figure>
+        <img src="assets/framework.png" alt="FLORE-AE overview, the FLORE-DiT carrier decoder, and one FLORE-DiT stage with aligned latent conditioning and multiresolution waveform modeling.">
+        <figcaption><strong>(a)</strong> Compact latents guide normalized carrier synthesis and amplitude recovery. <strong>(b)</strong> FLORE-DiT aligns latent conditioning with waveform synthesis and models context at multiple resolutions. <strong>(c)</strong> Each stage combines aligned latent injection, cross-attention, and local waveform modeling.</figcaption>
+      </figure>
+    </details>
+  </header>
+
+  <section id="reconstruction" aria-labelledby="reconstruction-title">
+    <h2 id="reconstruction-title"><span class="section-number">01</span> Audio Reconstruction</h2>
+    <p class="section-description">Speech, music, and sound reconstructions.</p>
+    <div class="domain-tabs" id="domain-tabs" aria-label="Audio domain">
+      <button type="button" data-domain="speech" aria-pressed="false">Speech</button>
+      <button type="button" data-domain="music" aria-pressed="false">Music</button>
+      <button type="button" data-domain="sound" aria-pressed="true">Sound</button>
+    </div>
+    <div class="example-selection">
+      <label for="dataset-select">Dataset</label>
+      <select id="dataset-select" aria-label="Reconstruction dataset"></select>
+      <div id="example-select" class="example-buttons" aria-label="Reconstruction example"></div>
+      <label class="sync-option"><input type="checkbox" id="sync-position" checked> Synchronize playback position</label>
+    </div>
+    <div id="reconstruction-example"></div>
+    <p class="note">Playback volume is shared. Reconstruction levels are preserved; only one recording plays at a time.</p>
+    <div id="reconstruction-spectra"></div>
+  </section>
+
+  <section id="generation" aria-labelledby="generation-title">
+    <h2 id="generation-title"><span class="section-number">02</span> Text-to-Audio Generation</h2>
+    <h3>Sound — AudioCaps</h3>
+    <p class="protocol">DiT latent generator · 24 sampling steps · CFG 5 · 10 s</p>
+    <div id="sound-generation"></div>
+    <h3 class="subsection">Music — Song Describer</h3>
+    <p class="protocol">DiT latent generator · 24 sampling steps · CFG 5 · 10 s</p>
+    <div id="music-generation"></div>
+  </section>
+
+  <section id="editing" aria-labelledby="editing-title">
+    <h2 id="editing-title"><span class="section-number">03</span> Audio Editing</h2>
+    <p class="section-description">Text-guided masked inference on AudioCaps. Shading marks the edited interval.</p>
+    <h3>Inpainting</h3>
+    <div id="inpainting-examples"></div>
+    <h3 class="subsection">Continuation</h3>
+    <div id="continuation-examples"></div>
+  </section>
+
+  <section id="results" aria-labelledby="results-title">
+    <h2 id="results-title"><span class="section-number">04</span> Results</h2>
+    <p class="section-description">Results reported in the paper.</p>
+    <div class="result-tabs" id="result-tabs" aria-label="Results table">
+      <button type="button" data-result="reconstruction" aria-pressed="true">Reconstruction · Table 1</button>
+      <button type="button" data-result="generation" aria-pressed="false">Generation · Table 2</button>
+      <button type="button" data-result="editing" aria-pressed="false">Editing · Table 3</button>
+    </div>
+    <div id="result-table"></div>
+  </section>
+</main>
+<dialog id="figure-dialog" aria-labelledby="figure-dialog-title"><div class="figure-dialog-heading"><p id="figure-dialog-title"></p><button type="button" data-close aria-label="Close enlarged figure">Close</button></div><div class="figure-dialog-content"><img alt=""></div></dialog>
+<div id="playback-message" role="status" aria-live="polite"></div>
+<noscript><p class="page">JavaScript is required to select and play the audio examples.</p></noscript>
+</body>
+</html>
