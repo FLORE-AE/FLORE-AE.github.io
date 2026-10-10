@@ -121,7 +121,7 @@
     const additional = example.models.filter(model => !primaryIds.includes(model.id));
     const baselines = example.models.filter(model => !['reference', 'ours_2048', 'ours_4096'].includes(model.id));
     const selectedBaseline = state.baselines[id] || example.spectra.defaultBaseline;
-    root.innerHTML = `<div class="recording-heading"><h3>${escape(example.title)}</h3><span class="duration">${example.duration.toFixed(1)} s</span></div>${example.description ? `<p class="recording-caption">${escape(example.description)}</p>` : ''}<div class="compare-controls"><span>Compare</span><button type="button" data-play-model="reference">Reference</button><button type="button" data-play-model="ours_2048">FLORE-AE</button><button type="button" data-play-model="ours_4096">FLORE-AE-C</button><select class="audio-baseline-select" aria-label="Playback baseline">${baselines.map(m => `<option value="${escape(m.id)}"${m.id === selectedBaseline ? ' selected' : ''}>${escape(m.label)}</option>`).join('')}</select><button type="button" data-play-baseline>Play baseline</button><button type="button" data-restart>Restart</button><label><input type="checkbox" data-loop${state.loop ? ' checked' : ''}> Loop</label></div><div class="track-grid">${primary.map(model => track(model, example.id)).join('')}</div>${additional.length ? `<details class="additional-models"><summary>Additional baselines (${additional.length})</summary><div class="track-grid">${additional.map(model => track(model, example.id)).join('')}</div></details>` : ''}`;
+    root.innerHTML = `<div class="recording-heading"><h3>${escape(example.title)}</h3><span class="duration">${example.duration.toFixed(1)} s</span></div>${example.description ? `<p class="recording-caption">${escape(example.description)}</p>` : ''}<div class="compare-controls"><span>Compare</span><button type="button" data-play-model="reference">Reference</button><button type="button" data-play-model="ours_2048">FLORE-AE</button><button type="button" data-play-model="ours_4096">FLORE-AE-C</button><select class="audio-baseline-select" aria-label="Playback baseline">${baselines.map(m => `<option value="${escape(m.id)}"${m.id === selectedBaseline ? ' selected' : ''}>${escape(m.label)}</option>`).join('')}</select><button type="button" data-play-baseline>Play baseline</button><button type="button" data-restart>Restart</button><label><input type="checkbox" data-loop${state.loop ? ' checked' : ''}> Loop</label></div>${example.highlight ? `<div class="detail-listen-controls highlight-controls"><span>Loop ${example.highlight[0].toFixed(1)}–${example.highlight[1].toFixed(1)} s</span>${primary.map(m => `<button type="button" data-highlight-model="${escape(m.id)}">${escape(m.label)}</button>`).join('')}<button type="button" data-highlight-full>Full clip</button></div>` : ''}<div class="track-grid">${primary.map(model => track(model, example.id)).join('')}</div>${additional.length ? `<details class="additional-models"><summary>Additional baselines (${additional.length})</summary><div class="track-grid">${additional.map(model => track(model, example.id)).join('')}</div></details>` : ''}`;
     $('#example-select').querySelectorAll('button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.example === id)));
     wirePlayers(root);
     renderReconstructionSpectra(example);
@@ -133,7 +133,20 @@
     root.querySelectorAll('[data-play-model]').forEach(button => button.addEventListener('click', () => play(button.dataset.playModel)));
     root.querySelector('[data-play-baseline]').addEventListener('click', () => play(root.querySelector('.audio-baseline-select').value));
     root.querySelector('.audio-baseline-select').addEventListener('change', event => updateComparisonBaseline(example, event.target.value));
+    root.querySelectorAll('[data-highlight-model]').forEach(button => button.addEventListener('click', () => {
+      const [start, end] = example.highlight;
+      const audio = root.querySelector(`audio[data-model="${button.dataset.highlightModel}"]`);
+      document.querySelectorAll('audio').forEach(other => { if (other !== audio) other.pause(); });
+      state.active = null;
+      state.segment = {group: example.id, start, end};
+      const seek = () => { if (audio.currentTime < start || audio.currentTime >= end) audio.currentTime = start; };
+      if (audio.readyState > 0) seek(); else audio.addEventListener('loadedmetadata', seek, {once: true});
+      audio.play().catch(() => notify('This recording could not be played.'));
+    }));
+    const fullClip = root.querySelector('[data-highlight-full]');
+    if (fullClip) fullClip.addEventListener('click', () => { state.segment = null; });
     root.querySelector('[data-restart]').addEventListener('click', () => {
+      state.segment = null;
       root.querySelectorAll('audio').forEach(a => { if (a.readyState > 0) a.currentTime = 0; });
       drawTracks();
     });
@@ -167,13 +180,13 @@
     const next = examples[(examples.findIndex(item => item.id === example.id) + 1) % examples.length];
     const pair = next.id === example.id ? [example] : [example, next];
     $('#reconstruction-spectra').innerHTML = `<h3>Spectrogram Comparison</h3>${pair.map(item => {
-      const key = state.baselines[item.id] || 'ear2';
+      const key = state.baselines[item.id] || item.spectra.defaultBaseline;
       const figures = item.spectra.baselines[key];
       const alt = `${item.title}: Reference, FLORE-AE, FLORE-AE-C and ${figures.label}`;
       const overview = item.spectra.overview;
       const allModels = `${item.title}: Reference, FLORE-AE, FLORE-AE-C, SAME-L, Stable Audio Open and CoDiCodec; spectrograms and signed level differences`;
       const mainFigure = overview ? spectrumFigure(overview.src, 'Spectrogram and level difference from Reference', allModels, 'overview') : spectrumFigure(figures.spectrum, 'Spectrogram', alt + '; spectrogram');
-      return `<article class="comparison-case" data-case="${escape(item.id)}"><div class="comparison-heading"><h4>${escape(item.title)} <span>${item.duration.toFixed(1)} s</span></h4><button type="button" data-listen-case="${escape(item.id)}">Listen</button></div>${mainFigure}<details class="additional-spectrum-comparisons"><summary>More comparisons</summary><div class="comparison-extra-controls"><label>Baseline <select aria-label="Spectrogram baseline for ${escape(item.title)}">${Object.entries(item.spectra.baselines).map(([id, v]) => `<option value="${escape(id)}"${id === key ? ' selected' : ''}>${escape(v.label)}</option>`).join('')}</select></label></div><div class="figure-pair">${spectrumFigure(figures.spectrum, 'Spectrogram', alt + '; spectrogram', 'spectrum')}${spectrumFigure(figures.difference, 'Level difference from Reference', alt + '; signed level difference to Reference', 'difference')}</div></details></article>`;
+      return `<article class="comparison-case" data-case="${escape(item.id)}"><div class="comparison-heading"><h4>${escape(item.title)} <span>${item.duration.toFixed(1)} s${item.highlight ? ` · dashed box ${item.highlight[0].toFixed(1)}–${item.highlight[1].toFixed(1)} s${item.highlightBand ? `, below ${item.highlightBand[1]} kHz` : ''}` : ''}</span></h4><button type="button" data-listen-case="${escape(item.id)}">Listen</button></div>${mainFigure}<details class="additional-spectrum-comparisons"><summary>More comparisons</summary><div class="comparison-extra-controls"><label>Baseline <select aria-label="Spectrogram baseline for ${escape(item.title)}">${Object.entries(item.spectra.baselines).map(([id, v]) => `<option value="${escape(id)}"${id === key ? ' selected' : ''}>${escape(v.label)}</option>`).join('')}</select></label></div><div class="figure-pair">${spectrumFigure(figures.spectrum, 'Spectrogram', alt + '; spectrogram', 'spectrum')}${spectrumFigure(figures.difference, 'Level difference from Reference', alt + '; signed level difference to Reference', 'difference')}</div></details></article>`;
     }).join('')}`;
     $('#reconstruction-spectra').querySelectorAll('.comparison-case').forEach(card => {
       const item = data.reconstruction.find(x => x.id === card.dataset.case);
@@ -239,35 +252,48 @@
     });
   }
 
-  function cells(row) {
+  function cells(row, columns) {
+    if ('group' in row) return row.group ? `<tr class="group-row"><th scope="colgroup" colspan="${columns}">${escape(row.group)}</th></tr>` : `<tr class="divider-row"><td colspan="${columns}"></td></tr>`;
     return `<tr class="${row.ours ? 'ours' : ''}">${row.cells.map((cell, index) => `<td${index === 0 ? ' class="model-name"' : ''}>${cell.bold ? `<strong>${escape(cell.text)}</strong>` : escape(cell.text)}</td>`).join('')}</tr>`;
+  }
+
+
+  function resultTable(caption, header, rows) {
+    return `<div class="table-scroll" tabindex="0" role="region" aria-label="${escape(caption)}"><table><caption>${escape(caption)}</caption><thead>${header}</thead><tbody>${rows.map(row => cells(row, rows.find(r => r.cells).cells.length)).join('')}</tbody></table></div>`;
   }
 
   function showResults(kind) {
     $('#result-tabs').querySelectorAll('button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.result === kind)));
+    if (kind === 'controlled') {
+      const t = data.tables.controlled;
+      const metrics = '<th scope="col">SI-SDR ↑</th><th scope="col">STFT ↓</th><th scope="col">MEL ↓</th><th scope="col">rFAD ↓</th>';
+      $('#result-table').innerHTML = `<div class="table-stack">${resultTable('Table 4(a). Signal parameterization.', `<tr><th scope="col">Variant</th>${metrics}</tr>`, t.a)}${resultTable('Table 4(b). FLORE-DiT architecture.', `<tr><th scope="col">Decoder</th><th scope="col">FLORE align.</th><th scope="col">Resolution hierarchy</th><th scope="col">Inner-DiT TFLOPs</th>${metrics}</tr>`, t.b)}${resultTable('Table 4(c). Few-step decoder objectives.', '<tr><th scope="col">Method</th><th scope="col">NFE</th><th scope="col">FAD ↓</th></tr>', t.c)}</div><p class="note">Controlled analysis of FLORE-AE. Panels (a–b) use matched training and four-evaluation decoding; panel (c) holds generated latents fixed across decoder objectives. Inner-DiT TFLOPs are per 3-s decoder call.</p>`;
+      return;
+    }
     const specification = {
       reconstruction: {
         caption: 'Table 1. Audio reconstruction across speech, music, and sound.',
-        header: '<tr><th scope="col">Autoencoder</th><th scope="col">Compression</th><th scope="col">NFE</th><th scope="col">Params. (M)</th><th scope="col">SI-SDR ↑</th><th scope="col">STFT ↓</th><th scope="col">MEL ↓</th><th scope="col">rFAD ↓</th><th scope="col">MOS ↑</th><th scope="col">RTF ↓</th></tr>',
+        header: '<tr class="grouped"><th scope="col" rowspan="2">Model</th><th scope="col" rowspan="2">Temporal compression</th><th scope="col" rowspan="2">NFE</th><th scope="col" rowspan="2">Params. (M)</th><th scope="colgroup" colspan="5">Reconstruction quality</th><th scope="colgroup">Efficiency</th></tr><tr><th scope="col">SI-SDR ↑</th><th scope="col">STFT<sub>log1p</sub> ↓</th><th scope="col">MEL<sub>log1p</sub> ↓</th><th scope="col">rFAD ↓</th><th scope="col">MOS ↑</th><th scope="col">RTF ↓</th></tr>',
         note: 'SI-SDR (dB) and log1p STFT/MEL are equal-weight means over six test sets; rFAD averages AudioCaps and Song Describer. MOS: mean ± standard deviation over 60 item-level scores, each averaging five listeners. RTF: 30-s, batch-one FP32 decoder measurements on one A800 GPU. † CoDiCodec’s equivalent sequence compression.'
       },
       generation: {
-        caption: 'Table 2. Text-to-audio generation on AudioCaps and Song Describer.',
+        caption: 'Table 2. Text-to-audio generation on AudioCaps (sound) and Song Describer (music).',
         header: '<tr class="grouped"><th scope="col" rowspan="2">Autoencoder</th><th scope="colgroup" colspan="2">Sound (AudioCaps)</th><th scope="colgroup" colspan="2">Music (Song Describer)</th></tr><tr><th scope="col">FAD ↓</th><th scope="col">CLAP ↑</th><th scope="col">FAD ↓</th><th scope="col">CLAP ↑</th></tr>',
         note: 'Each autoencoder is paired with its designated generator. Prompts, test populations, sampling, and metrics are fixed within each dataset. FAD uses CLAP embeddings.'
       },
       editing: {
         caption: 'Table 3. Training-free audio editing on AudioCaps.',
-        header: '<tr class="grouped"><th scope="col" rowspan="2">Autoencoder</th><th scope="colgroup" colspan="4">Inpainting</th><th scope="colgroup" colspan="4">Continuation</th></tr><tr><th scope="col">FAD<sub>full</sub> ↓</th><th scope="col">FAD<sub>edit</sub> ↓</th><th scope="col">Ctx. SI-SDR ↑</th><th scope="col">CLAP<sub>text</sub> ↑</th><th scope="col">FAD<sub>full</sub> ↓</th><th scope="col">FAD<sub>edit</sub> ↓</th><th scope="col">Ctx. SI-SDR ↑</th><th scope="col">CLAP<sub>text</sub> ↑</th></tr>',
+        header: '<tr class="grouped"><th scope="col" rowspan="2">Autoencoder</th><th scope="colgroup" colspan="4">Single-region inpainting</th><th scope="colgroup" colspan="4">Continuation</th></tr><tr><th scope="col">FAD<sub>full</sub> ↓</th><th scope="col">FAD<sub>edit</sub> ↓</th><th scope="col">Ctx. SI-SDR ↑</th><th scope="col">CLAP<sub>text</sub> ↑</th><th scope="col">FAD<sub>full</sub> ↓</th><th scope="col">FAD<sub>edit</sub> ↓</th><th scope="col">Ctx. SI-SDR ↑</th><th scope="col">CLAP<sub>text</sub> ↑</th></tr>',
         note: 'Inpainting fills an internal gap; continuation extends an observed prefix. FAD uses CLAP embeddings. Ctx. denotes unedited context. Both FLORE variants use four decoder evaluations for editing.'
       }
     }[kind];
-    $('#result-table').innerHTML = `<div class="table-scroll" tabindex="0" role="region" aria-label="${escape(specification.caption)}"><table><caption>${escape(specification.caption)}</caption><thead>${specification.header}</thead><tbody>${data.tables[kind].map(cells).join('')}</tbody></table></div><p class="note">${escape(specification.note)}</p>`;
+    $('#result-table').innerHTML = `${resultTable(specification.caption, specification.header, data.tables[kind])}<p class="note">${escape(specification.note)}</p>`;
   }
 
   $('#domain-tabs').querySelectorAll('button').forEach(button => button.addEventListener('click', () => selectDomain(button.dataset.domain)));
   $('#dataset-select').addEventListener('change', event => selectDataset(event.target.value));
   $('#result-tabs').querySelectorAll('button').forEach(button => button.addEventListener('click', () => showResults(button.dataset.result)));
+  document.querySelectorAll('[data-result-link]').forEach(link => link.addEventListener('click', () => showResults(link.dataset.resultLink)));
   selectDomain('sound');
   for (const [kind, id] of [['sound', '#sound-generation'], ['music', '#music-generation']]) {
     $(id).innerHTML = examplesMarkup(data.generation[kind]);

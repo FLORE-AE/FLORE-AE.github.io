@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="FLORE-AE audio examples: reconstruction, text-to-audio generation, and audio editing.">
+  <meta name="description" content="FLORE-AE: method overview and audio examples for reconstruction, text-to-audio generation, and audio editing.">
   <title>FLORE-AE — Audio Examples</title>
-  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-  <link rel="stylesheet" href="styles.css?v=5b60b60bf6e6">
-  <script defer src="data.js?v=202ac5425023"></script>
-  <script defer src="app.js?v=405675ae9de6"></script>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=a890feff351a">
+  <link rel="stylesheet" href="styles.css?v=50f6cf296a75">
+  <script defer src="data.js?v=0912ac2b4747"></script>
+  <script defer src="app.js?v=0604f82b971a"></script>
 </head>
 <body>
 <a class="skip-link" href="#reconstruction">Skip to audio examples</a>
@@ -16,23 +16,120 @@
   <header class="page-header">
     <h1><span class="paper-name">FLORE-AE:</span> Rethinking Audio Autoencoding<br class="wide-break"> with Waveform Diffusion Decoders</h1>
     <nav aria-label="Sections">
+      <a href="#method">Method</a>
       <a href="#reconstruction">Reconstruction</a>
       <a href="#generation">Generation</a>
       <a href="#editing">Editing</a>
       <a href="#results">Results</a>
     </nav>
     <p class="overview">FLORE-AE formulates audio reconstruction at high compression as waveform diffusion conditioned on compact latents. Its latent interface supports reconstruction, text-to-audio generation, and editing.</p>
-    <details class="method-details">
-      <summary>Method overview</summary>
-      <figure>
-        <img src="assets/framework.png" alt="FLORE-AE overview, the FLORE-DiT carrier decoder, and one FLORE-DiT stage with aligned latent conditioning and multiresolution waveform modeling.">
-        <figcaption><strong>(a)</strong> Compact latents guide normalized carrier synthesis and amplitude recovery. <strong>(b)</strong> FLORE-DiT aligns latent conditioning with waveform synthesis and models context at multiple resolutions. <strong>(c)</strong> Each stage combines aligned latent injection, cross-attention, and local waveform modeling.</figcaption>
+    <div class="at-a-glance">
+      <figure class="glance-figure">
+        <img src="assets/method/glance_scatter.png?v=bec7a434a728" width="1800" height="882" alt="SI-SDR against MEL error for all reconstruction baselines, as in the paper's Figure 1(c); FLORE-AE and FLORE-AE-C lie in the upper-left, ahead of SAME-L and the other autoencoders.">
+        <figcaption>Six-test-set reconstruction fidelity, as in the paper's Figure 1(c); upper-left is better, parentheses give temporal compression. Moûsai (−27.7 dB) lies outside the range.</figcaption>
       </figure>
-    </details>
+      <dl class="highlights">
+        <div><dt>14.11 dB</dt><dd>FLORE-AE SI-SDR over six speech, music and sound test sets at 2048×; strongest baseline 12.07 dB</dd></div>
+        <div><dt>0.034</dt><dd>FLORE-AE MEL error; lowest among the baselines 0.043</dd></div>
+        <div><dt>12.31 dB at 4096×</dt><dd>FLORE-AE-C SI-SDR, ahead of every baseline, including SAME-L (12.07 dB) at the same compression</dd></div>
+      </dl>
+    </div>
   </header>
 
+  <section id="method" aria-labelledby="method-title">
+    <h2 id="method-title"><span class="section-number">01</span> Method</h2>
+    <p class="method-lead">Most audio autoencoders train the decoder with spectral losses and a learned discriminator. FLORE-AE instead treats decoding as latent-conditioned waveform diffusion: the compact latent encodes source structure, and a decoder trained by regression, without a critic, models the remaining acoustic detail.</p>
+    <div class="paradigm-grid">
+      <figure class="method-figure">
+        <img src="assets/method/teaser_paradigm_a.png?v=86552284ffba" width="1300" height="583" alt="Prevailing spectral-adversarial framework: a waveform decoder trained with spectral loss and a discriminator.">
+        <figcaption><span class="fig-tag">Prevailing</span>Spectral losses supervise source correspondence, while a jointly trained discriminator supplies realism through an adversarial game.</figcaption>
+      </figure>
+      <figure class="method-figure">
+        <img src="assets/method/teaser_paradigm_b.png?v=6d32c81f7583" width="1300" height="858" alt="FLORE-AE waveform diffusion autoencoder: clean-target denoising of the waveform conditioned on the compact latent, without a critic.">
+        <figcaption><span class="fig-tag ours">FLORE-AE</span>The decoder denoises the waveform conditioned on the latent and is trained by clean-target regression with spectral reconstruction; no critic is involved.</figcaption>
+      </figure>
+    </div>
+    <div class="equation"><span class="equation-label">Decoder objective</span><img src="assets/method/eq_flow.svg?v=7f328bbfe8ea" style="width:32.7em" alt="s_t = (1-t) eps + t s, L_pred = E[ ||f_theta(s_t, t, z_c) - s||^2 / T ]"></div>
+    <p class="method-lead">Using a diffusion decoder at 2048–4096× compression raises three problems:</p>
+    <ol class="problem-cards">
+      <li class="problem-card">
+        <div class="problem-head"><span class="problem-number">①</span><h3>Wide dynamic range</h3></div>
+        <p class="problem-text">A diffusion decoder applies one noise schedule to the whole waveform, so quiet passages are buried in noise long before loud ones. Normalizing evens this out but discards the dynamics the reconstruction must restore.</p>
+        <div class="problem-key"><span>Core issue</span><p>Loudness shifts the effective noise level</p></div>
+        <div class="problem-goal"><span>Goal</span><p>A scale-invariant denoising target, with amplitude kept in the latent.</p><a href="#component-a">→ A · Carrier–amplitude factorization</a></div>
+      </li>
+      <li class="problem-card">
+        <div class="problem-head"><span class="problem-number">②</span><h3>Sparse-to-dense synthesis</h3></div>
+        <p class="problem-text">Each latent step must steer thousands of samples. Waveform U-Nets add multiscale structure but reach the latent only through intermediate features; DiTs model context with attention but compute every layer on the finest grid.</p>
+        <div class="problem-key"><span>Core issue</span><p>Latents are 2,048–4,096× shorter than the waveform</p></div>
+        <div class="problem-goal"><span>Goal</span><p>Time-aligned latent guidance at every scale, with broad context on coarser grids.</p><a href="#component-b">→ B · FLORE-DiT</a></div>
+      </li>
+      <li class="problem-card">
+        <div class="problem-head"><span class="problem-number">③</span><h3>Iterative decoding cost</h3></div>
+        <p class="problem-text">Diffusion decoders call the network several times per clip, while spectral–adversarial decoders need one pass. This latency offsets the gain from compact latents, and fewer steps usually cost quality on generated latents.</p>
+        <div class="problem-key"><span>Core issue</span><p>Each sampling step costs a full decoder pass</p></div>
+        <div class="problem-goal"><span>Goal</span><p>Two-step decoding that holds on generated as well as clean latents.</p><a href="#component-c">→ C · Endpoint-Aware MeanFlow</a></div>
+      </li>
+    </ol>
+    <details class="architecture-details">
+      <summary>Architecture · Figure 2 (overview, FLORE-DiT backbone and stage)</summary>
+      <figure class="method-figure framework-figure">
+        <img src="assets/framework.png?v=f6def6029a4d" alt="FLORE-AE overview, the FLORE-DiT carrier decoder, and one FLORE-DiT stage with aligned latent conditioning and multiresolution waveform modeling.">
+        <figcaption>(a) Overview, (b) FLORE-DiT carrier decoder, (c) one FLORE-DiT stage.<br><span class="badge">A</span>The amplitude predictor and the normalized carrier in (a).<br><span class="badge">B</span>Position-aligned expansion, stage-aligned injection and the resolution hierarchy in (b)–(c).<br><span class="badge">C</span>EA-MF adapts the same carrier decoder for two-update decoding (a training objective, not drawn).</figcaption>
+      </figure>
+    </details>
+    <ol class="method-rows">
+      <li class="method-row" id="component-a">
+        <div class="method-copy">
+          <span class="method-index">A · addresses ①</span>
+          <h3>Carrier–amplitude factorization</h3>
+          <p>Diffuse only the carrier normalized by a smoothed local-RMS envelope, so all regions share a similar noise level; an amplitude predictor recovers global gain and local dynamics from the same latent, so the latent must still encode them.</p>
+          <div class="row-math"><img src="assets/method/eq_amp.svg?v=1317007df65c" style="width:18.9em" alt="c = x / a(x), hat x = hat a_psi(z_c) * hat c"></div>
+          <p class="evidence">Global RMS normalization lowers rFAD but costs SI-SDR and MEL; only the local carrier improves all four metrics, and inverse-energy loss weighting does not reproduce it. Normalize what hampers denoising, but make the latent reconstruct the dynamics.</p>
+        </div>
+        <figure class="evidence-figure">
+          <img src="assets/method/evidence_factorization.png?v=449ea2699b20" width="1655" height="666" alt="SI-SDR, MEL and rFAD for fixed-scale waveform, global RMS with predicted gain, and local carrier with predicted envelope (ours): 12.32, 11.95, 13.45 dB; 0.041, 0.044, 0.036; 0.344, 0.149, 0.110.">
+          <figcaption><span class="fig-tag">Measured</span><strong>Signal-parameterization control</strong> (<a href="#results" data-result-link="controlled">Table 4a</a>). Matched training and four-evaluation decoding; only the diffusion target and amplitude handling change.</figcaption>
+        </figure>
+      </li>
+      <li class="method-row" id="component-b">
+        <div class="method-copy">
+          <span class="method-index">B · addresses ②</span>
+          <h3>FLORE-DiT</h3>
+          <p>A DiT with a downsampling–upsampling hierarchy: each latent step is expanded into position-specific conditions and re-injected at every resolution, keeping source guidance time-aligned, while broader context moves to coarser stages with sliding-window attention.</p>
+          <div class="row-math"><img src="assets/method/eq_align.svg?v=f21c531de3e9" style="width:29.6em" alt="h^(0) = P_theta(c_t) + S_theta(z_c), h^(s) <- h^(s) + gamma_s * I_s(C)"></div>
+          <p class="evidence">A standard DiT already has the best rFAD (0.108) but only 10.07 dB SI-SDR: plausible audio is not a faithful reconstruction. The aligned path raises SI-SDR on every backbone, with the learned expansion the most clearly supported component; the hierarchy then keeps quality at 64% lower inner-DiT compute.</p>
+        </div>
+        <figure class="evidence-figure">
+          <img src="assets/method/evidence_flore_dit.png?v=9f56a9056344" width="1655" height="737" alt="SI-SDR before and after adding the aligned path: waveform U-Net 6.67 to 7.65, single-resolution DiT 10.07 to 13.33, hierarchical DiT 12.34 to 13.23, FLORE-DiT without and with learned expansion 12.99 to 13.45 dB; inner-DiT TFLOPs 0.274 at full resolution versus 0.098 with the hierarchy (13.42 vs. 13.45 dB).">
+          <figcaption><span class="fig-tag">Measured</span><strong>Decoder-architecture controls</strong> (<a href="#results" data-result-link="controlled">Table 4b</a>; Appendix F, same protocol). Left: SI-SDR before and after adding the aligned path to each backbone; the FLORE-DiT row removes only the learned expansion. Right: FLORE-DiT with and without the resolution hierarchy. Matched training, four-evaluation decoding; TFLOPs per 3-s call.</figcaption>
+        </figure>
+      </li>
+      <li class="method-row" id="component-c">
+        <div class="method-copy">
+          <span class="method-index">C · addresses ③</span>
+          <h3>Endpoint-Aware MeanFlow</h3>
+          <p>Adapt the decoder to finite-interval average velocities (iMF) and add spectral supervision of instantaneous and near-endpoint predictions; decoding takes two updates on the grid (0, 0.5, 1).</p>
+          <div class="row-math"><img src="assets/method/eq_meanflow.svg?v=f3af00d02376" style="width:25.1em" alt="hat c_r = c_t + (r-t) u, hat c^aux_{t,r} = c_t + (1-t) u"></div>
+          <p class="evidence">Halving evaluations with iMF improves FAD only modestly (0.118 → 0.111); endpoint-aware supervision at the same two evaluations lowers it to 0.086. Decoder objectives should be judged on generated latents under the deployed interface.</p>
+        </div>
+        <figure class="evidence-figure">
+          <img src="assets/method/evidence_eamf.png?v=0340ae514f9b" width="1655" height="666" alt="Generation FAD on fixed generated latents: conditional flow matching 0.118 with four evaluations, iMF 0.111 and EA-MF (ours) 0.086 with two.">
+          <figcaption><span class="fig-tag">Measured</span><strong>Decoder-objective comparison on generated latents</strong> (<a href="#results" data-result-link="controlled">Table 4c</a>). The generator and its sampled latents are fixed; only the decoder objective and evaluation count change.</figcaption>
+        </figure>
+      </li>
+    </ol>
+    <div class="objective">
+      <div class="method-copy">
+        <h3>Training and inference</h3>
+        <p>Stage 1 trains the encoder, carrier decoder and amplitude predictor jointly with a KL bottleneck; Stage 2 freezes the encoder and adapts the decoder with EA-MF. Reconstruction, generation and editing share this decoder.</p>
+      </div>
+      <div class="method-math"><img src="assets/method/eq_objective.svg?v=c92c8bc6403b" style="width:27.4em" alt="L_AE = L_pred + lambda_amp L_amp + lambda_spec L_MRSTFT + R_lat"></div>
+    </div>
+  </section>
+
   <section id="reconstruction" aria-labelledby="reconstruction-title">
-    <h2 id="reconstruction-title"><span class="section-number">01</span> Audio Reconstruction</h2>
+    <h2 id="reconstruction-title"><span class="section-number">02</span> Audio Reconstruction</h2>
     <p class="section-description">Speech, music, and sound reconstructions.</p>
     <div class="domain-tabs" id="domain-tabs" aria-label="Audio domain">
       <button type="button" data-domain="speech" aria-pressed="false">Speech</button>
@@ -51,17 +148,17 @@
   </section>
 
   <section id="generation" aria-labelledby="generation-title">
-    <h2 id="generation-title"><span class="section-number">02</span> Text-to-Audio Generation</h2>
+    <h2 id="generation-title"><span class="section-number">03</span> Text-to-Audio Generation</h2>
     <h3>Sound — AudioCaps</h3>
     <p class="protocol">DiT latent generator · 24 sampling steps · CFG 5 · 10 s</p>
     <div id="sound-generation"></div>
     <h3 class="subsection">Music — Song Describer</h3>
-    <p class="protocol">DiT latent generator · 24 sampling steps · CFG 5 · 10 s</p>
+    <p class="protocol">DiT latent generator · 24 sampling steps · CFG 5 · 9 s</p>
     <div id="music-generation"></div>
   </section>
 
   <section id="editing" aria-labelledby="editing-title">
-    <h2 id="editing-title"><span class="section-number">03</span> Audio Editing</h2>
+    <h2 id="editing-title"><span class="section-number">04</span> Audio Editing</h2>
     <p class="section-description">Text-guided masked inference on AudioCaps. Shading marks the edited interval.</p>
     <h3>Inpainting</h3>
     <div id="inpainting-examples"></div>
@@ -70,12 +167,13 @@
   </section>
 
   <section id="results" aria-labelledby="results-title">
-    <h2 id="results-title"><span class="section-number">04</span> Results</h2>
+    <h2 id="results-title"><span class="section-number">05</span> Results</h2>
     <p class="section-description">Results reported in the paper.</p>
     <div class="result-tabs" id="result-tabs" aria-label="Results table">
       <button type="button" data-result="reconstruction" aria-pressed="true">Reconstruction · Table 1</button>
       <button type="button" data-result="generation" aria-pressed="false">Generation · Table 2</button>
       <button type="button" data-result="editing" aria-pressed="false">Editing · Table 3</button>
+      <button type="button" data-result="controlled" aria-pressed="false">Controlled analysis · Table 4</button>
     </div>
     <div id="result-table"></div>
   </section>
