@@ -6,7 +6,7 @@
   <meta name="description" content="FLORE-AE: method overview and audio examples for reconstruction, text-to-audio generation, and audio editing.">
   <title>FLORE-AE — Audio Examples</title>
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=a890feff351a">
-  <link rel="stylesheet" href="styles.css?v=50f6cf296a75">
+  <link rel="stylesheet" href="styles.css?v=88c81d5a3dcc">
   <script defer src="data.js?v=0912ac2b4747"></script>
   <script defer src="app.js?v=0604f82b971a"></script>
 </head>
@@ -50,7 +50,8 @@
       </figure>
     </div>
     <div class="equation"><span class="equation-label">Decoder objective</span><img src="assets/method/eq_flow.svg?v=7f328bbfe8ea" style="width:32.7em" alt="s_t = (1-t) eps + t s, L_pred = E[ ||f_theta(s_t, t, z_c) - s||^2 / T ]"></div>
-    <p class="method-lead">Using a diffusion decoder at 2048–4096× compression raises three problems:</p>
+    <h3 class="method-subhead">Three challenges at high compression</h3>
+    <p class="method-lead">Using a diffusion decoder at 2048–4096× compression raises three problems that the standard formulation leaves open:</p>
     <ol class="problem-cards">
       <li class="problem-card">
         <div class="problem-head"><span class="problem-number">①</span><h3>Wide dynamic range</h3></div>
@@ -71,6 +72,7 @@
         <div class="problem-goal"><span>Goal</span><p>Two-step decoding that holds on generated as well as clean latents.</p><a href="#component-c">→ C · Endpoint-Aware MeanFlow</a></div>
       </li>
     </ol>
+    <h3 class="method-subhead">How FLORE-AE addresses them</h3>
     <details class="architecture-details">
       <summary>Architecture · Figure 2 (overview, FLORE-DiT backbone and stage)</summary>
       <figure class="method-figure framework-figure">

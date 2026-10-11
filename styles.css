@@ -251,3 +251,7 @@ tr.ours td.model-name { font-weight: 700; }
 
 tbody tr.group-row th { background: transparent; color: var(--muted, #5b6573); font-style: italic; font-weight: 500; font-size: 11.5px; text-align: left; padding-top: 12px; padding-bottom: 5px; border-bottom: 1px solid var(--line, #e2e6ea); }
 tbody tr.divider-row td { padding: 0; border-bottom: 2px solid var(--line, #d7dde4); }
+
+.method-subhead { font-family: 'Source Serif 4', Georgia, serif; font-size: 22px; font-weight: 600; margin: 34px 0 8px; color: #19334f; }
+.method-subhead + .method-lead { margin-top: 0; }
+.method-subhead + .architecture-details { margin-top: 6px; }
