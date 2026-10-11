@@ -6,7 +6,7 @@
   <meta name="description" content="FLORE-AE: method overview and audio examples for reconstruction, text-to-audio generation, and audio editing.">
   <title>FLORE-AE — Audio Examples</title>
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=a890feff351a">
-  <link rel="stylesheet" href="styles.css?v=88c81d5a3dcc">
+  <link rel="stylesheet" href="styles.css?v=b3ebcf010e86">
   <script defer src="data.js?v=0912ac2b4747"></script>
   <script defer src="app.js?v=0604f82b971a"></script>
 </head>
@@ -38,20 +38,42 @@
 
   <section id="method" aria-labelledby="method-title">
     <h2 id="method-title"><span class="section-number">01</span> Method</h2>
-    <p class="method-lead">Most audio autoencoders train the decoder with spectral losses and a learned discriminator. FLORE-AE instead treats decoding as latent-conditioned waveform diffusion: the compact latent encodes source structure, and a decoder trained by regression, without a critic, models the remaining acoustic detail.</p>
-    <div class="paradigm-grid">
+    <p class="method-lead">Latent audio generation needs an autoencoder whose compact latents are easy to model and still decode to faithful, realistic waveforms.</p>
+    <h3 class="method-subhead"><span class="method-kicker">Motivation</span>From spectral–adversarial to waveform diffusion decoding</h3>
+    <div class="story-row">
+      <div class="story-copy">
+        <span class="story-label">The prevailing paradigm · spectral–adversarial decoding</span>
+        <p>A deterministic decoder maps each latent to one waveform. Spectral losses supervise correspondence to the source, and a jointly trained discriminator supplies realism.</p>
+        <ul class="story-points adv">
+          <li><strong>Minimax training.</strong> The decoder chases an evolving critic; adversarial updates can be unstable, and representation learning is tied to the real/fake objective.</li>
+          <li><strong>Indirect detail.</strong> Fine detail the latent leaves open is shaped only through spectral and real/fake feedback.</li>
+          <li><strong>Rate pressure.</strong> Keeping more detail means a larger latent, which makes downstream generation more expensive.</li>
+        </ul>
+      </div>
       <figure class="method-figure">
         <img src="assets/method/teaser_paradigm_a.png?v=86552284ffba" width="1300" height="583" alt="Prevailing spectral-adversarial framework: a waveform decoder trained with spectral loss and a discriminator.">
-        <figcaption><span class="fig-tag">Prevailing</span>Spectral losses supervise source correspondence, while a jointly trained discriminator supplies realism through an adversarial game.</figcaption>
-      </figure>
-      <figure class="method-figure">
-        <img src="assets/method/teaser_paradigm_b.png?v=6d32c81f7583" width="1300" height="858" alt="FLORE-AE waveform diffusion autoencoder: clean-target denoising of the waveform conditioned on the compact latent, without a critic.">
-        <figcaption><span class="fig-tag ours">FLORE-AE</span>The decoder denoises the waveform conditioned on the latent and is trained by clean-target regression with spectral reconstruction; no critic is involved.</figcaption>
       </figure>
     </div>
-    <div class="equation"><span class="equation-label">Decoder objective</span><img src="assets/method/eq_flow.svg?v=7f328bbfe8ea" style="width:32.7em" alt="s_t = (1-t) eps + t s, L_pred = E[ ||f_theta(s_t, t, z_c) - s||^2 / T ]"></div>
-    <h3 class="method-subhead">Three challenges at high compression</h3>
-    <p class="method-lead">Using a diffusion decoder at 2048–4096× compression raises three problems that the standard formulation leaves open:</p>
+    <div class="story-row">
+      <div class="story-copy">
+        <span class="story-label ours">FLORE-AE · waveform diffusion decoding</span>
+        <p>Decoding becomes latent-conditioned generation: the latent encodes source structure, and a diffusion decoder generates the waveform from noise.</p>
+        <ul class="story-points">
+          <li><strong>Regression, no critic.</strong> The decoder is trained by clean-target regression along noise–data paths, with spectral reconstruction as additional supervision.</li>
+          <li><strong>Detail as residual variation.</strong> Acoustic detail the latent leaves open is modeled by the decoder rather than shaped indirectly.</li>
+          <li><strong>Compact, continuous latents.</strong> The latent need not grow to specify every sample, and the downstream generator models continuous latents rather than quantized codec tokens.</li>
+        </ul>
+      </div>
+      <figure class="method-figure">
+        <img src="assets/method/teaser_paradigm_b.png?v=6d32c81f7583" width="1300" height="858" alt="FLORE-AE waveform diffusion autoencoder: clean-target denoising of the waveform conditioned on the compact latent, without a critic.">
+      </figure>
+    </div>
+    <div class="objective-compare">
+      <div class="objective-cell adv"><span>Prevailing objective · min–max with a critic</span><img src="assets/method/eq_prevailing.svg?v=da39a6e2f0b7" style="width:26.6em" alt="hat x = G_theta(z_c); min over phi, theta, max over psi of L_spec(hat x, x) + lambda_adv L_adv(hat x; D_psi) + R_lat"></div>
+      <div class="objective-cell ours"><span>FLORE-AE objective · regression only</span><img src="assets/method/eq_ours.svg?v=7a1593a9ef56" style="width:25.7em" alt="s_t = (1-t) eps + t s, hat s = f_theta(s_t, t, z_c); min over phi, theta of E[ ||hat s - s||^2 / T ] + lambda_spec L_MRSTFT + R_lat"></div>
+    </div>
+    <h3 class="method-subhead"><span class="method-kicker">Challenges</span>Three obstacles to direct diffusion decoding</h3>
+    <p class="method-lead">Swapping in a standard waveform diffusion decoder does not work out of the box: at 2048–4096× compression, three obstacles appear.</p>
     <ol class="problem-cards">
       <li class="problem-card">
         <div class="problem-head"><span class="problem-number">①</span><h3>Wide dynamic range</h3></div>
@@ -72,14 +94,15 @@
         <div class="problem-goal"><span>Goal</span><p>Two-step decoding that holds on generated as well as clean latents.</p><a href="#component-c">→ C · Endpoint-Aware MeanFlow</a></div>
       </li>
     </ol>
-    <h3 class="method-subhead">How FLORE-AE addresses them</h3>
-    <details class="architecture-details">
-      <summary>Architecture · Figure 2 (overview, FLORE-DiT backbone and stage)</summary>
-      <figure class="method-figure framework-figure">
-        <img src="assets/framework.png?v=f6def6029a4d" alt="FLORE-AE overview, the FLORE-DiT carrier decoder, and one FLORE-DiT stage with aligned latent conditioning and multiresolution waveform modeling.">
-        <figcaption>(a) Overview, (b) FLORE-DiT carrier decoder, (c) one FLORE-DiT stage.<br><span class="badge">A</span>The amplitude predictor and the normalized carrier in (a).<br><span class="badge">B</span>Position-aligned expansion, stage-aligned injection and the resolution hierarchy in (b)–(c).<br><span class="badge">C</span>EA-MF adapts the same carrier decoder for two-update decoding (a training objective, not drawn).</figcaption>
-      </figure>
-    </details>
+    <h3 class="method-subhead"><span class="method-kicker">Approach</span>How FLORE-AE addresses them</h3>
+    <figure class="method-figure overview-figure">
+      <img src="assets/method/framework_overview.png?v=f03af0cef600" width="1800" height="404" alt="FLORE-AE overview: the audio encoder produces the latent condition, the FLORE-DiT carrier decoder synthesizes the normalized carrier from Gaussian noise, and the amplitude predictor restores the waveform scale.">
+      <figcaption class="overview-keys">
+        <div><span class="badge">A</span>Carrier–amplitude factorization: the decoder synthesizes a normalized carrier <i>ĉ</i>, and the amplitude predictor <i>â</i><sub>ψ</sub>(<i>z</i><sub>c</sub>) restores the waveform scale.</div>
+        <div><span class="badge">B</span>FLORE-DiT carrier decoder: time-aligned latent conditioning with multiresolution waveform modeling; its backbone is shown under B below.</div>
+        <div><span class="badge">C</span>Endpoint-Aware MeanFlow adapts the same decoder for two-update decoding; it is a training objective and is not drawn.</div>
+      </figcaption>
+    </figure>
     <ol class="method-rows">
       <li class="method-row" id="component-a">
         <div class="method-copy">
@@ -106,6 +129,15 @@
           <img src="assets/method/evidence_flore_dit.png?v=9f56a9056344" width="1655" height="737" alt="SI-SDR before and after adding the aligned path: waveform U-Net 6.67 to 7.65, single-resolution DiT 10.07 to 13.33, hierarchical DiT 12.34 to 13.23, FLORE-DiT without and with learned expansion 12.99 to 13.45 dB; inner-DiT TFLOPs 0.274 at full resolution versus 0.098 with the hierarchy (13.42 vs. 13.45 dB).">
           <figcaption><span class="fig-tag">Measured</span><strong>Decoder-architecture controls</strong> (<a href="#results" data-result-link="controlled">Table 4b</a>; Appendix F, same protocol). Left: SI-SDR before and after adding the aligned path to each backbone; the FLORE-DiT row removes only the learned expansion. Right: FLORE-DiT with and without the resolution hierarchy. Matched training, four-evaluation decoding; TFLOPs per 3-s call.</figcaption>
         </figure>
+      </li>
+      <li class="method-detail">
+        <details class="architecture-details">
+          <summary>FLORE-DiT backbone and stage · Figure 2(b–c)</summary>
+          <figure class="method-figure">
+            <img src="assets/method/framework_backbone.png?v=a7e3a4b1b8bc" width="1600" height="743" alt="FLORE-DiT backbone with position-aligned latent expansion, stage-aligned latent injection, fine-scale local blocks and a coarse DiT stage, and one FLORE-DiT stage.">
+            <figcaption>(b) FLORE-DiT carrier decoder: position-aligned latent expansion, stage-aligned injection at every resolution, fine-scale local blocks around a downsampling–upsampling DiT hierarchy. (c) One stage: aligned injection, sliding-window self-attention, global latent cross-attention, temporal convolution and feed-forward.</figcaption>
+          </figure>
+        </details>
       </li>
       <li class="method-row" id="component-c">
         <div class="method-copy">
