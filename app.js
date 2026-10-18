@@ -121,7 +121,7 @@
     const additional = example.models.filter(model => !primaryIds.includes(model.id));
     const baselines = example.models.filter(model => !['reference', 'ours_2048', 'ours_4096'].includes(model.id));
     const selectedBaseline = state.baselines[id] || example.spectra.defaultBaseline;
-    root.innerHTML = `<div class="recording-heading"><h3>${escape(example.title)}</h3><span class="duration">${example.duration.toFixed(1)} s</span></div>${example.description ? `<p class="recording-caption">${escape(example.description)}</p>` : ''}<div class="compare-controls"><span>Compare</span><button type="button" data-play-model="reference">Reference</button><button type="button" data-play-model="ours_2048">FLORE-AE</button><button type="button" data-play-model="ours_4096">FLORE-AE-C</button><select class="audio-baseline-select" aria-label="Playback baseline">${baselines.map(m => `<option value="${escape(m.id)}"${m.id === selectedBaseline ? ' selected' : ''}>${escape(m.label)}</option>`).join('')}</select><button type="button" data-play-baseline>Play baseline</button><button type="button" data-restart>Restart</button><label><input type="checkbox" data-loop${state.loop ? ' checked' : ''}> Loop</label></div>${example.highlight ? `<div class="detail-listen-controls highlight-controls"><span>Loop ${example.highlight[0].toFixed(1)}–${example.highlight[1].toFixed(1)} s</span>${primary.map(m => `<button type="button" data-highlight-model="${escape(m.id)}">${escape(m.label)}</button>`).join('')}<button type="button" data-highlight-full>Full clip</button></div>` : ''}<div class="track-grid">${primary.map(model => track(model, example.id)).join('')}</div>${additional.length ? `<details class="additional-models"><summary>Additional baselines (${additional.length})</summary><div class="track-grid">${additional.map(model => track(model, example.id)).join('')}</div></details>` : ''}`;
+    root.innerHTML = `<div class="recording-heading"><h3>${escape(example.title)}</h3><span class="duration">${example.duration.toFixed(1)} s</span></div>${example.description ? `<p class="recording-caption">${escape(example.description)}</p>` : ''}<div class="compare-controls"><span>Compare</span><button type="button" data-play-model="reference">Reference</button><button type="button" data-play-model="ours_2048">FLORE-AE</button><button type="button" data-play-model="ours_4096">FLORE-AE-C</button><select class="audio-baseline-select" aria-label="Playback baseline">${baselines.map(m => `<option value="${escape(m.id)}"${m.id === selectedBaseline ? ' selected' : ''}>${escape(m.label)}</option>`).join('')}</select><button type="button" data-play-baseline>Play baseline</button><button type="button" data-restart>Restart</button><label><input type="checkbox" data-loop${state.loop ? ' checked' : ''}> Loop</label></div>${example.highlight ? `<div class="detail-listen-controls highlight-controls"><span title="Loops the span marked by the dashed box in the spectrogram below">Dashed-box segment ${example.highlight[0].toFixed(1)}–${example.highlight[1].toFixed(1)} s</span>${primary.map(m => `<button type="button" data-highlight-model="${escape(m.id)}">${escape(m.label)}</button>`).join('')}<button type="button" data-highlight-full>Play full clip</button><small class="highlight-hint">Loops the span boxed in the spectrogram below.</small></div>` : ''}<div class="track-grid">${primary.map(model => track(model, example.id)).join('')}</div>${additional.length ? `<details class="additional-models"><summary>Additional baselines (${additional.length})</summary><div class="track-grid">${additional.map(model => track(model, example.id)).join('')}</div></details>` : ''}`;
     $('#example-select').querySelectorAll('button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.example === id)));
     wirePlayers(root);
     renderReconstructionSpectra(example);
@@ -133,8 +133,10 @@
     root.querySelectorAll('[data-play-model]').forEach(button => button.addEventListener('click', () => play(button.dataset.playModel)));
     root.querySelector('[data-play-baseline]').addEventListener('click', () => play(root.querySelector('.audio-baseline-select').value));
     root.querySelector('.audio-baseline-select').addEventListener('change', event => updateComparisonBaseline(example, event.target.value));
+    let lastSegmentModel = 'reference';
     root.querySelectorAll('[data-highlight-model]').forEach(button => button.addEventListener('click', () => {
       const [start, end] = example.highlight;
+      lastSegmentModel = button.dataset.highlightModel;
       const audio = root.querySelector(`audio[data-model="${button.dataset.highlightModel}"]`);
       document.querySelectorAll('audio').forEach(other => { if (other !== audio) other.pause(); });
       state.active = null;
@@ -144,7 +146,14 @@
       audio.play().catch(() => notify('This recording could not be played.'));
     }));
     const fullClip = root.querySelector('[data-highlight-full]');
-    if (fullClip) fullClip.addEventListener('click', () => { state.segment = null; });
+    if (fullClip) fullClip.addEventListener('click', () => {
+      state.segment = null;
+      const playing = [...root.querySelectorAll('audio')].find(a => !a.paused);
+      const audio = playing || root.querySelector(`audio[data-model="${lastSegmentModel}"]`) || root.querySelector('audio[data-model="reference"]');
+      document.querySelectorAll('audio').forEach(other => { if (other !== audio) other.pause(); });
+      if (audio.readyState > 0) audio.currentTime = 0; else audio.addEventListener('loadedmetadata', () => { audio.currentTime = 0; }, {once: true});
+      audio.play().catch(() => notify('This recording could not be played.'));
+    });
     root.querySelector('[data-restart]').addEventListener('click', () => {
       state.segment = null;
       root.querySelectorAll('audio').forEach(a => { if (a.readyState > 0) a.currentTime = 0; });

@@ -6,9 +6,9 @@
   <meta name="description" content="FLORE-AE: method overview and audio examples for reconstruction, text-to-audio generation, and audio editing.">
   <title>FLORE-AE — Audio Examples</title>
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=a890feff351a">
-  <link rel="stylesheet" href="styles.css?v=b3ebcf010e86">
+  <link rel="stylesheet" href="styles.css?v=395cb5a8df37">
   <script defer src="data.js?v=0912ac2b4747"></script>
-  <script defer src="app.js?v=0604f82b971a"></script>
+  <script defer src="app.js?v=44c612001c94"></script>
 </head>
 <body>
 <a class="skip-link" href="#reconstruction">Skip to audio examples</a>
@@ -17,9 +17,9 @@
     <h1><span class="paper-name">FLORE-AE:</span> Rethinking Audio Autoencoding<br class="wide-break"> with Waveform Diffusion Decoders</h1>
     <nav aria-label="Sections">
       <a href="#method">Method</a>
-      <a href="#reconstruction">Reconstruction</a>
-      <a href="#generation">Generation</a>
-      <a href="#editing">Editing</a>
+      <a href="#reconstruction">Reconstruction Demo</a>
+      <a href="#generation">Generation Demo</a>
+      <a href="#editing">Editing Demo</a>
       <a href="#results">Results</a>
     </nav>
     <p class="overview">FLORE-AE formulates audio reconstruction at high compression as waveform diffusion conditioned on compact latents. Its latent interface supports reconstruction, text-to-audio generation, and editing.</p>
@@ -29,8 +29,8 @@
         <figcaption>Six-test-set reconstruction fidelity, as in the paper's Figure 1(c); upper-left is better, parentheses give temporal compression. Moûsai (−27.7 dB) lies outside the range.</figcaption>
       </figure>
       <dl class="highlights">
-        <div><dt>14.11 dB</dt><dd>FLORE-AE SI-SDR over six speech, music and sound test sets at 2048×; strongest baseline 12.07 dB</dd></div>
-        <div><dt>0.034</dt><dd>FLORE-AE MEL error; lowest among the baselines 0.043</dd></div>
+        <div><dt>14.11 dB</dt><dd>FLORE-AE SI-SDR over six speech, music and sound test sets at 2048×, versus 12.07 dB for the strongest baseline</dd></div>
+        <div><dt>0.034</dt><dd>FLORE-AE MEL error, versus 0.043 for the best baseline</dd></div>
         <div><dt>12.31 dB at 4096×</dt><dd>FLORE-AE-C SI-SDR, ahead of every baseline, including SAME-L (12.07 dB) at the same compression</dd></div>
       </dl>
     </div>
